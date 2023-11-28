@@ -13,6 +13,7 @@ import (
 )
 
 type LoggerOpts struct {
+	Message                 string
 	AccessLogTypeName       string
 	PrintLogType            bool
 	PrintStackTraceToStderr bool
@@ -22,6 +23,7 @@ type LoggerOpts struct {
 func LoggerMiddleware(logger *zerolog.Logger, opts *LoggerOpts) func(next http.Handler) http.Handler {
 	if opts == nil {
 		opts = &LoggerOpts{
+			Message:                 "incoming_request",
 			AccessLogTypeName:       "access",
 			PrintLogType:            true,
 			PrintStackTraceToStderr: true,
@@ -79,7 +81,7 @@ func LoggerMiddleware(logger *zerolog.Logger, opts *LoggerOpts) func(next http.H
 						})
 					}
 				}
-				le.Msg("incoming_request")
+				le.Msg(opts.Message)
 			}()
 
 			next.ServeHTTP(ww, r)
