@@ -16,6 +16,7 @@ type LoggerOpts struct {
 	AccessLogTypeName       string
 	PrintLogType            bool
 	PrintStackTraceToStderr bool
+	CustomFields            map[string]func(ww middleware.WrapResponseWriter, r *http.Request) interface{}
 }
 
 func LoggerMiddleware(logger *zerolog.Logger, opts *LoggerOpts) func(next http.Handler) http.Handler {
@@ -70,8 +71,15 @@ func LoggerMiddleware(logger *zerolog.Logger, opts *LoggerOpts) func(next http.H
 						"latency":    t2.Sub(t1).Truncate(1000 * time.Nanosecond).String(),
 						"bytes_in":   r.Header.Get("Content-Length"),
 						"bytes_out":  ww.BytesWritten(),
-					}).
-					Msg("incoming_request")
+					})
+				if len(opts.CustomFields) > 0 {
+					for fieldName, valueFunc := range opts.CustomFields {
+						le = le.Fields(map[string]interface{}{
+							fieldName: valueFunc(ww, r),
+						})
+					}
+				}
+				le.Msg("incoming_request")
 			}()
 
 			next.ServeHTTP(ww, r)
