@@ -17,17 +17,32 @@ type LoggerOpts struct {
 	AccessLogTypeName       string
 	PrintLogType            bool
 	PrintStackTraceToStderr bool
-	CustomFields            map[string]func(ww middleware.WrapResponseWriter, r *http.Request) interface{}
+	Fields                  map[string]func(ww middleware.WrapResponseWriter, r *http.Request) interface{}
+}
+
+func DefaultLoggerOpts() *LoggerOpts {
+	return &LoggerOpts{
+		Message:                 "incoming_request",
+		AccessLogTypeName:       "access",
+		PrintLogType:            true,
+		PrintStackTraceToStderr: true,
+		Fields: map[string]func(ww middleware.WrapResponseWriter, r *http.Request) interface{}{
+			"remote_ip":  remoteAddr,
+			"url":        url,
+			"proto":      proto,
+			"method":     method,
+			"user_agent": userAgent,
+			"status":     status,
+			//"latency":    latency,
+			"bytes_in":  bytesIn,
+			"bytes_out": bytesOut,
+		},
+	}
 }
 
 func LoggerMiddleware(logger *zerolog.Logger, opts *LoggerOpts) func(next http.Handler) http.Handler {
 	if opts == nil {
-		opts = &LoggerOpts{
-			Message:                 "incoming_request",
-			AccessLogTypeName:       "access",
-			PrintLogType:            true,
-			PrintStackTraceToStderr: true,
-		}
+		opts = DefaultLoggerOpts()
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -58,24 +73,16 @@ func LoggerMiddleware(logger *zerolog.Logger, opts *LoggerOpts) func(next http.H
 				}
 
 				// log end request
-				le := zlog.Info()
+				le := zlog.Info().Timestamp()
 				if opts != nil && opts.PrintLogType && opts.AccessLogTypeName != "" {
 					le = le.Str("type", opts.AccessLogTypeName)
 				}
-				le.Timestamp().
-					Fields(map[string]interface{}{
-						"remote_ip":  getRemoteAddr(r),
-						"url":        r.URL.Path,
-						"proto":      r.Proto,
-						"method":     r.Method,
-						"user_agent": r.Header.Get("User-Agent"),
-						"status":     ww.Status(),
-						"latency":    t2.Sub(t1).Truncate(1000 * time.Nanosecond).String(),
-						"bytes_in":   r.Header.Get("Content-Length"),
-						"bytes_out":  ww.BytesWritten(),
-					})
-				if len(opts.CustomFields) > 0 {
-					for fieldName, valueFunc := range opts.CustomFields {
+
+				// TODO
+				le.Str("latency", t2.Sub(t1).Truncate(1000*time.Nanosecond).String())
+
+				if len(opts.Fields) > 0 {
+					for fieldName, valueFunc := range opts.Fields {
 						le = le.Fields(map[string]interface{}{
 							fieldName: valueFunc(ww, r),
 						})
